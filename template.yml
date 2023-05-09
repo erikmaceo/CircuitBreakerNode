@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Sample SAM Template for circuit breaker pattern
+
+Resources: # Creamos nuestra maquina de estado
+  CircuitBreakerStateMachine: # More info about State Machine Resource:
+    Type: AWS::Serverless::StateMachine 
+    Properties:
+      Type: STANDARD  #  Standard or Express   
+      DefinitionUri: statemachine/circuitbreaker.asl.json
+      DefinitionSubstitutions:
+        GetCircuitStatusFunctionArn: !GetAtt GetCircuitStatusFunction.Arn
+        UpdateCircuitStatusFunctionArn: !GetAtt UpdateCircuitStatusFunction.Arn
+        DDBPutItem: !Sub arn:${AWS::Partition}:states:::dynamodb:putItem
+        DDBTable: !Ref CircuitBreakerTable
+      Policies: 
+        - AWSLambdaRole
+        - DynamoDBWritePolicy:
+            TableName: !Ref CircuitBreakerTable
+
+  GetCircuitStatusFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: functions/
+      Handler: get-circuit-status.lambdaHandler
+      Runtime: nodejs16.x
+      MemorySize: 256
+      Timeout: 30
+      Policies:
+        - AmazonDynamoDBFullAccess
+        - CloudWatchLogsFullAccess
+        - AWSXrayFullAccess
+        - AWSStepFunctionsFullAccess
+
+
+  UpdateCircuitStatusFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: functions/
+      Handler: update-circuit-status.lambdaHandler
+      Runtime: nodejs16.x
+      MemorySize: 256
+      Timeout: 30
+      Policies:
+        - AmazonDynamoDBFullAccess
+        - CloudWatchLogsFullAccess
+        - AWSXrayFullAccess
+        - AWSStepFunctionsFullAccess      
+
+  TestCircuitBreakerFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: functions/
+      Handler: test-circuit-breaker.lambdaHandler
+      Runtime: nodejs16.x
+      MemorySize: 256
+      Timeout: 30
+      Policies:
+        - AmazonDynamoDBFullAccess
+        - CloudWatchLogsFullAccess
+        - AWSXrayFullAccess
+        - AWSStepFunctionsFullAccess
+  
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: functions/
+      Handler: hello-world.lambdaHandler
+      Runtime: nodejs16.x
+      MemorySize: 256
+      Timeout: 30
+      Policies:
+        - AmazonDynamoDBFullAccess
+        - CloudWatchLogsFullAccess
+        - AWSXrayFullAccess
+        - AWSStepFunctionsFullAccess
+
+
+  CircuitBreakerTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CircuitBreaker
+      KeySchema:
+        - AttributeName: ServiceName
+          KeyType: HASH
+        - AttributeName: ExpireTimeStamp
+          KeyType: RANGE
+      AttributeDefinitions:
+        - AttributeName: ServiceName
+          AttributeType: S
+        - AttributeName: ExpireTimeStamp
+          AttributeType: N
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TimeToLiveSpecification:
+        AttributeName: ExpireTimeStamp
+        Enabled: true
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+      
